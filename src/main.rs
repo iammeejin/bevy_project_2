@@ -5,6 +5,7 @@ use bevy::{
 use bevy::window::PrimaryWindow;
 use rand::prelude::*;
 
+
 pub const NUMBER_OF_TEXT_BOXES: usize = 4;
 pub const TEXT_BOXES_SPEED: f32 = 200.0;
 pub const TEXT_BOXES_SIZE: f32 = 64.0;
@@ -14,25 +15,26 @@ pub fn main() {
     App::new()
     // Bevy Plugins
     .add_plugins(DefaultPlugins)
-    //Event
-    .add_event::<CursorMoved>()
     //Startup System
-    .add_startup_system(spawn_camera)
-    .add_startup_system(setup_ocean)
-    .add_startup_system(spawn_text_boxes)
-    .add_system(camera_control_pan)
-    .add_system(camera_control_zoom)
-    .add_system(text_boxes_movement)
-    .add_system(update_text_boxes_direction)
-    .add_system(confine_text_boxes_movement)
+    .add_systems(Startup,spawn_camera)
+    .add_systems(Startup, setup_ocean)
+    .add_systems(Startup, spawn_text_boxes)
+    .add_systems(Update, camera_control_pan)
+    .add_systems(Update, camera_control_zoom)
+    .add_systems(Update, text_boxes_movement)
+    .add_systems(Update, update_text_boxes_direction)
+    .add_systems(Update, confine_text_boxes_movement)
     .run();
 }
-
 
 #[derive(Component)]
 pub struct TextBox {
     pub direction: Vec2,
+    pub is_hovered: bool,
 }
+
+#[derive(Component)]
+pub struct Music;
 
 
 pub fn spawn_camera(
@@ -112,7 +114,7 @@ pub fn spawn_text_boxes(
 ) {
     let window = window_query.get_single().unwrap();
 
-    let camera_height = 1000.0; 
+    let camera_height = 1000.0;
     let text_box_height = camera_height - 10.0;
     let text_values = ["Josh", "Almie", "redbeard", "github.com"];
 
@@ -135,6 +137,7 @@ pub fn spawn_text_boxes(
             },
             TextBox {
                 direction: Vec2::new(random::<f32>(), random::<f32>()).normalize(),
+                is_hovered: false,
             },
         ))
 
@@ -149,7 +152,7 @@ pub fn spawn_text_boxes(
                             color: Color::BLACK,
                         },
                     }],
-                    linebreak_behaviour: BreakLineOn::WordBoundary,
+                    linebreak_behavior:BreakLineOn::WordBoundary,
                     alignment: TextAlignment::Left,
                 },
                 text_2d_bounds: Text2dBounds {
@@ -164,21 +167,22 @@ pub fn spawn_text_boxes(
     }
 }
 
+
 pub fn text_boxes_movement(
-    mut text_boxes_query: Query<(&mut Transform,&TextBox)>,
-    time: Res<Time>
-){
+    mut text_boxes_query: Query<(&mut Transform, &TextBox)>,
+    time: Res<Time>,
+) {
     for (mut transform, textbox) in text_boxes_query.iter_mut() {
-        let direction = Vec3::new(textbox.direction.x, textbox.direction.y,0.0);
-        transform.translation += direction * TEXT_BOXES_SPEED * time.delta_seconds();
+        if !textbox.is_hovered {
+            let direction = Vec3::new(textbox.direction.x, textbox.direction.y, 0.0);
+            transform.translation += direction * TEXT_BOXES_SPEED * time.delta_seconds();
+        }
     }
 }
 
 pub fn update_text_boxes_direction(
     mut text_boxes_query: Query<(&Transform, &mut TextBox)>,
     window_query: Query<&Window, With <PrimaryWindow>>,
-    audio: Res<Audio>, //To play audio files
-    asset_server: Res<AssetServer>, //To load audio files
 ){
     let window = window_query.get_single().unwrap();
 
@@ -189,35 +193,16 @@ pub fn update_text_boxes_direction(
         let y_max = window.height() - half_text_box_size;
 
     for (transform, mut textbox) in text_boxes_query.iter_mut() {
-        let mut direction_changed = false;
-
-        
         let translation = transform.translation;
         if translation.x < x_min || translation.x > x_max {
             textbox.direction.x *= -1.0;
-            direction_changed = true;
         }
         if translation.y < y_min || translation.y > y_max {
             textbox.direction.y *= -1.0;
-            direction_changed = true;
-        }
-
-         //Play SFX
-         if direction_changed {
-            //Play Sound Effect
-            let sound_effect_1 = asset_server.load("audio/impactMetal_003.ogg");
-            let sound_effect_2 = asset_server.load("audio/impactMetal_004.ogg");
-
-            //Randomly play one of the two sound effects.
-            let sound_effect = if random::<f32>() > 0.5 {
-                sound_effect_1
-            } else {
-                sound_effect_2
-            };
-            audio.play(sound_effect);
         }
         }
     }
+
 
 pub fn confine_text_boxes_movement(
     mut text_boxes_query: Query<&mut Transform, With<TextBox>>,
